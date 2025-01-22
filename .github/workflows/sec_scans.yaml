@@ -1,4 +1,4 @@
-name: Security Scans
+name: SAST Scans
 
 on:
   #push:
@@ -39,11 +39,6 @@ jobs:
         with:
           path: '**/spotbugsXml.xml'
 
-
-  DAST-Scan:
-    runs-on: ubuntu-latest
-
-    steps:
       - name: Grype Dependency Scanner (Report) # if it finds a vulnerable dependency, consider executing "make upgrade" as first attempt or try "go mod graph" or "go list -json all" or "go mod why -m $MODULE" (where $MODULE is the import reported in scan result) and if it's a false positive add it to .grype.yaml
         id: scan
         uses: anchore/scan-action@v5
@@ -52,11 +47,6 @@ jobs:
           #acs-report-enable: true
           fail-build: false # to always generate the report, then again a scan that might fail
 
-
-  Secrets-Scan:
-    runs-on: ubuntu-latest
-
-    steps:
       - name: Inspect Dependency SARIF Report
         run: cat ${{ steps.scan.outputs.sarif }}
 
@@ -68,14 +58,36 @@ jobs:
         with: # exclusions in .truffleignore file
           branch: ${{ github.head_ref }}
 
-
-  Hadolint:
-    runs-on: ubuntu-latest
-
-    steps:
       - name: Hadolint Dockerfile Linter
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile
           recursive: true
           failure-threshold: warning
+
+  Semgrep-Scan:
+    runs-on: ubuntu-latest
+    container:
+      # A Docker image with Semgrep installed. Do not change this.
+      image: returntocorp/semgrep
+    permissions:
+      # required for all workflows
+      security-events: write
+      # only required for workflows in private repositories
+      actions: read
+      contents: read
+
+    steps:
+
+      - name: Checkout Sources
+        uses: actions/checkout@v4
+
+      - name: Semgrep Quality Scanner
+        run: cd marathon || :; semgrep scan --sarif --metrics=off --config=p/security-audit --config=p/secrets --config=p/ci . > /tmp/semgrep-results.sarif
+
+      # upload the results for the CodeQL GitHub app to annotate the code
+      - name: Save SARIF results as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-scan-results-open-in-ide # Yep, you can open this file in your IDE: Just drag and drop it into IntelliJ IDEA or Visual Studio Code
+          path: /tmp/semgrep-results.sarif

@@ -1,4 +1,4 @@
-name: SAST Scans
+name: Security Scans
 
 on:
   #push:
@@ -39,6 +39,7 @@ jobs:
         with:
           path: '**/spotbugsXml.xml'
 
+
   DAST-Scan:
     runs-on: ubuntu-latest
 
@@ -51,5 +52,18 @@ jobs:
           #acs-report-enable: true
           fail-build: false # to always generate the report, then again a scan that might fail
 
+
+  Secrets-Scan:
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Inspect Dependency SARIF Report
         run: cat ${{ steps.scan.outputs.sarif }}
+
+      - name: Create empty ".truffleignore" in case it doesn't exist
+        run: touch .truffleignore
+
+      - name: Secret Scan with Trufflehog
+        uses: UnicornGlobal/trufflehog-actions-scan@master
+        with: # exclusions in .truffleignore file
+          branch: ${{ github.head_ref }}

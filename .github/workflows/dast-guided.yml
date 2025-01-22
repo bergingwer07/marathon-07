@@ -1,0 +1,57 @@
+name: DAST Guided Scans
+
+on:
+  #push:
+  workflow_dispatch: # to allow to run manually
+
+
+
+jobs:
+
+  DAST-Guided-Scan:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Sources
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 11
+          distribution: 'temurin'
+
+      - name: Setup Maven Dependency Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build with Maven
+        run: cd marathon || :; mvn clean install -DskipTests
+
+      - name: Deploy Marathon for Local Integration Tests
+        run: cd marathon || :; cd integration && ./start-integration.sh
+
+      - name: Download OWASP ZAP # TODO consider caching the downloaded ZAP?
+        run: |
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.15.0/ZAP_2.15.0_Crossplatform.zip && \
+          unzip ZAP_2.15.0_Crossplatform.zip && \
+          rm ZAP_2.15.0_Crossplatform.zip && \
+          mv ZAP_2.15.0 ZAP && \
+          cd ZAP
+
+      - name: Start OWASP ZAP in Background
+        run: cd ZAP && pwd && nohup ./zap.sh -daemon -port 7777 -host 127.0.0.1 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true -config api.incerrordetails=true &
+
+      - name: Guided Scan with OWASP ZAP and Test-Automation
+        run: sleep 30 && cd marathon || :; cd integration && ./zap-guided-scan.sh
+
+      - name: Upload OWASP ZAP Report as Artifact (HTML)
+        uses: actions/upload-artifact@v4
+        with:
+          name: report.html
+          path: /tmp/report.html

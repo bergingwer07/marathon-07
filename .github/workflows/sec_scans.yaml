@@ -38,3 +38,18 @@ jobs:
         uses: jwgmeligmeyling/spotbugs-github-action@master
         with:
           path: '**/spotbugsXml.xml'
+
+  DAST-Scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Grype Dependency Scanner (Report) # if it finds a vulnerable dependency, consider executing "make upgrade" as first attempt or try "go mod graph" or "go list -json all" or "go mod why -m $MODULE" (where $MODULE is the import reported in scan result) and if it's a false positive add it to .grype.yaml
+        id: scan
+        uses: anchore/scan-action@v5
+        with:
+          path: "."
+          #acs-report-enable: true
+          fail-build: false # to always generate the report, then again a scan that might fail
+
+      - name: Inspect Dependency SARIF Report
+        run: cat ${{ steps.scan.outputs.sarif }}
